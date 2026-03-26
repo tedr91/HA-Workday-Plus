@@ -9,12 +9,13 @@ from typing import Any
 from holidays import HolidayBase, __version__ as python_holidays_version
 
 from homeassistant.core import CALLBACK_TYPE, ServiceResponse, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceNotFound
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from .const import ALLOWED_DAYS, DOMAIN
+from .const import ALLOWED_DAYS, DOMAIN, LOGGER
 
 
 class BaseWorkdayEntity(Entity):
@@ -120,17 +121,26 @@ class BaseWorkdayEntity(Entity):
         start_of_year = dt_util.start_of_local_day(datetime(now.year, 1, 1))
         end_of_next_year = dt_util.start_of_local_day(datetime(now.year + 2, 1, 1))
 
-        response = await self.hass.services.async_call(
-            "calendar",
-            "get_events",
-            {
-                "entity_id": self._exclusion_calendars,
-                "start_date_time": start_of_year.isoformat(),
-                "end_date_time": end_of_next_year.isoformat(),
-            },
-            blocking=True,
-            return_response=True,
-        )
+        try:
+            response = await self.hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": self._exclusion_calendars,
+                    "start_date_time": start_of_year.isoformat(),
+                    "end_date_time": end_of_next_year.isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except (HomeAssistantError, ServiceNotFound) as err:
+            LOGGER.warning(
+                "Unable to refresh exclusion calendar events for %s: %s",
+                self.entity_id,
+                err,
+            )
+            self._calendar_excluded_dates = set()
+            return
 
         excluded_dates: set[date] = set()
         if isinstance(response, dict):

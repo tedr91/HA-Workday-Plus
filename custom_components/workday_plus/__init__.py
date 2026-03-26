@@ -18,6 +18,7 @@ from .const import (
     CONF_OFFSET,
     CONF_PROVINCE,
     CONF_REMOVE_HOLIDAYS,
+    DEFAULT_OFFSET,
     LOGGER,
     PLATFORMS,
 )
@@ -34,17 +35,19 @@ type WorkdayConfigEntry = ConfigEntry[HolidayBase]
 async def async_setup_entry(hass: HomeAssistant, entry: WorkdayConfigEntry) -> bool:
     """Set up Workday from a config entry."""
 
+    options = entry.options
+
     calc_add_holidays = cast(
-        list[DateLike], validate_dates(entry.options[CONF_ADD_HOLIDAYS])
+        list[DateLike], validate_dates(options.get(CONF_ADD_HOLIDAYS, []))
     )
     calc_remove_holidays: list[str] = validate_dates(
-        entry.options[CONF_REMOVE_HOLIDAYS]
+        options.get(CONF_REMOVE_HOLIDAYS, [])
     )
-    categories: list[str] | None = entry.options.get(CONF_CATEGORY)
-    country: str | None = entry.options.get(CONF_COUNTRY)
-    days_offset: int = int(entry.options[CONF_OFFSET])
-    language: str | None = entry.options.get(CONF_LANGUAGE)
-    province: str | None = entry.options.get(CONF_PROVINCE)
+    categories: list[str] | None = options.get(CONF_CATEGORY)
+    country: str | None = options.get(CONF_COUNTRY)
+    days_offset: int = int(options.get(CONF_OFFSET, DEFAULT_OFFSET))
+    language: str | None = options.get(CONF_LANGUAGE)
+    province: str | None = options.get(CONF_PROVINCE)
     year: int = (dt_util.now() + timedelta(days=days_offset)).year
 
     await async_validate_country_and_province(hass, entry, country, province)
