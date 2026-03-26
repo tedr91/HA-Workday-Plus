@@ -18,7 +18,12 @@ from homeassistant.helpers.entity_platform import (
 )
 
 from . import WorkdayConfigEntry
-from .const import CONF_EXCLUDES, CONF_OFFSET, CONF_WORKDAYS
+from .const import (
+    CONF_EXCLUDES,
+    CONF_EXCLUSION_CALENDARS,
+    CONF_OFFSET,
+    CONF_WORKDAYS,
+)
 from .entity import BaseWorkdayEntity
 
 SERVICE_CHECK_DATE: Final = "check_date"
@@ -33,6 +38,7 @@ async def async_setup_entry(
     """Set up the Workday sensor."""
     days_offset: int = int(entry.options[CONF_OFFSET])
     excludes: list[str] = entry.options[CONF_EXCLUDES]
+    exclusion_calendars: list[str] = entry.options.get(CONF_EXCLUSION_CALENDARS, [])
     sensor_name: str = entry.options[CONF_NAME]
     workdays: list[str] = entry.options[CONF_WORKDAYS]
     obj_holidays = entry.runtime_data
@@ -52,6 +58,7 @@ async def async_setup_entry(
                 obj_holidays,
                 workdays,
                 excludes,
+                exclusion_calendars,
                 days_offset,
                 sensor_name,
                 entry.entry_id,
@@ -70,6 +77,7 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
         obj_holidays: HolidayBase,
         workdays: list[str],
         excludes: list[str],
+        exclusion_calendars: list[str],
         days_offset: int,
         name: str,
         entry_id: str,
@@ -79,6 +87,7 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
             obj_holidays,
             workdays,
             excludes,
+            exclusion_calendars,
             days_offset,
             name,
             entry_id,
@@ -86,6 +95,7 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
         self._attr_extra_state_attributes = {
             CONF_WORKDAYS: workdays,
             CONF_EXCLUDES: excludes,
+            CONF_EXCLUSION_CALENDARS: exclusion_calendars,
             CONF_OFFSET: days_offset,
         }
 

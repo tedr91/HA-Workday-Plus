@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import WorkdayConfigEntry
-from .const import CONF_EXCLUDES, CONF_OFFSET, CONF_WORKDAYS
+from .const import CONF_EXCLUDES, CONF_EXCLUSION_CALENDARS, CONF_OFFSET, CONF_WORKDAYS
 from .entity import BaseWorkdayEntity
 
 
@@ -25,6 +25,7 @@ async def async_setup_entry(
     """Set up the Holiday Calendar config entry."""
     days_offset: int = int(entry.options[CONF_OFFSET])
     excludes: list[str] = entry.options[CONF_EXCLUDES]
+    exclusion_calendars: list[str] = entry.options.get(CONF_EXCLUSION_CALENDARS, [])
     sensor_name: str = entry.options[CONF_NAME]
     workdays: list[str] = entry.options[CONF_WORKDAYS]
     obj_holidays = entry.runtime_data
@@ -35,6 +36,7 @@ async def async_setup_entry(
                 obj_holidays,
                 workdays,
                 excludes,
+                exclusion_calendars,
                 days_offset,
                 sensor_name,
                 entry.entry_id,
@@ -51,6 +53,7 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
         obj_holidays: HolidayBase,
         workdays: list[str],
         excludes: list[str],
+        exclusion_calendars: list[str],
         days_offset: int,
         name: str,
         entry_id: str,
@@ -60,6 +63,7 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
             obj_holidays,
             workdays,
             excludes,
+            exclusion_calendars,
             days_offset,
             name,
             entry_id,

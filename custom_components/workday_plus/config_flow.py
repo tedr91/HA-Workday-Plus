@@ -21,6 +21,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
     CountrySelector,
     CountrySelectorConfig,
+    EntitySelector,
+    EntitySelectorConfig,
     LanguageSelector,
     LanguageSelectorConfig,
     NumberSelector,
@@ -39,6 +41,7 @@ from .const import (
     CONF_ADD_HOLIDAYS,
     CONF_CATEGORY,
     CONF_EXCLUDES,
+    CONF_EXCLUSION_CALENDARS,
     CONF_OFFSET,
     CONF_PROVINCE,
     CONF_REMOVE_HOLIDAYS,
@@ -191,6 +194,9 @@ DATA_SCHEMA_OPT = vol.Schema(
         vol.Optional(CONF_OFFSET, default=DEFAULT_OFFSET): NumberSelector(
             NumberSelectorConfig(min=-10, max=10, step=1, mode=NumberSelectorMode.BOX)
         ),
+        vol.Optional(CONF_EXCLUSION_CALENDARS, default=[]): EntitySelector(
+            EntitySelectorConfig(domain=["calendar"], multiple=True)
+        ),
         vol.Optional(CONF_ADD_HOLIDAYS, default=[]): SelectSelector(
             SelectSelectorConfig(
                 options=[],
@@ -261,6 +267,7 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             combined_input: dict[str, Any] = {**self.data, **user_input}
+            combined_input.setdefault(CONF_EXCLUSION_CALENDARS, [])
 
             try:
                 await self.hass.async_add_executor_job(
@@ -280,6 +287,7 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
                 CONF_OFFSET: combined_input[CONF_OFFSET],
                 CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
+                CONF_EXCLUSION_CALENDARS: combined_input[CONF_EXCLUSION_CALENDARS],
                 CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
                 CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
                 CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
@@ -326,6 +334,7 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
 
         if user_input is not None:
             combined_input: dict[str, Any] = {**self.config_entry.options, **user_input}
+            combined_input.setdefault(CONF_EXCLUSION_CALENDARS, [])
             if CONF_PROVINCE not in user_input:
                 # Province not present, delete old value (if present) too
                 combined_input.pop(CONF_PROVINCE, None)
@@ -349,6 +358,9 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
                     CONF_OFFSET: combined_input[CONF_OFFSET],
                     CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
+                    CONF_EXCLUSION_CALENDARS: combined_input[
+                        CONF_EXCLUSION_CALENDARS
+                    ],
                     CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
                     CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
                     CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
