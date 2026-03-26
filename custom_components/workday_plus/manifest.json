@@ -1,0 +1,12 @@
+{
+  "domain": "workday_plus",
+  "name": "Workday Plus",
+  "codeowners": ["@tedr91"],
+  "config_flow": true,
+  "documentation": "https://github.com/tedr91/HA-Workday-Plus",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "loggers": ["holidays"],
+  "requirements": ["holidays==0.84"],
+  "version": "0.1.1"
+}

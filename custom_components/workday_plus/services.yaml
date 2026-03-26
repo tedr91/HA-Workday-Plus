@@ -1,0 +1,9 @@
+check_date:
+  target:
+    entity:
+      integration: workday_plus
+  fields:
+    check_date:
+      example: "2022-12-25"
+      selector:
+        date:
