@@ -22,12 +22,14 @@ from .const import (
     CONF_EXCLUDES,
     CONF_EXCLUSION_CALENDARS,
     CONF_OFFSET,
+    CONF_REFRESH_INTERVAL_MINUTES,
     CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
     CONF_TRIGGER_ON_EVENT_WORDS,
     CONF_WORKDAYS,
     DEFAULT_EXCLUDES,
     DEFAULT_NAME,
     DEFAULT_OFFSET,
+    DEFAULT_REFRESH_INTERVAL_MINUTES,
     DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
     DEFAULT_TRIGGER_ON_EVENT_WORDS,
     DEFAULT_WORKDAYS,
@@ -46,6 +48,9 @@ async def async_setup_entry(
     """Set up the Workday sensor."""
     options = entry.options
     days_offset: int = int(options.get(CONF_OFFSET, DEFAULT_OFFSET))
+    refresh_interval_minutes: int = int(
+        options.get(CONF_REFRESH_INTERVAL_MINUTES, DEFAULT_REFRESH_INTERVAL_MINUTES)
+    )
     excludes: list[str] = options.get(CONF_EXCLUDES, DEFAULT_EXCLUDES)
     exclusion_calendars: list[str] = options.get(CONF_EXCLUSION_CALENDARS, [])
     trigger_on_any_all_day_events: bool = entry.options.get(
@@ -78,6 +83,7 @@ async def async_setup_entry(
                 trigger_on_any_all_day_events,
                 trigger_on_event_words,
                 days_offset,
+                refresh_interval_minutes,
                 sensor_name,
                 entry.entry_id,
             )
@@ -99,6 +105,7 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
         trigger_on_any_all_day_events: bool,
         trigger_on_event_words: list[str],
         days_offset: int,
+        refresh_interval_minutes: int,
         name: str,
         entry_id: str,
     ) -> None:
@@ -111,6 +118,7 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
             trigger_on_any_all_day_events,
             trigger_on_event_words,
             days_offset,
+            refresh_interval_minutes,
             name,
             entry_id,
         )
@@ -121,6 +129,7 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
             CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: trigger_on_any_all_day_events,
             CONF_TRIGGER_ON_EVENT_WORDS: trigger_on_event_words,
             CONF_OFFSET: days_offset,
+            CONF_REFRESH_INTERVAL_MINUTES: refresh_interval_minutes,
         }
 
     def update_data(self, now: datetime) -> None:

@@ -12,7 +12,11 @@ from homeassistant.core import CALLBACK_TYPE, ServiceResponse, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceNotFound
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.helpers.event import (
+    async_track_point_in_utc_time,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import ALLOWED_DAYS, DOMAIN, LOGGER
@@ -24,7 +28,9 @@ class BaseWorkdayEntity(Entity):
     _attr_has_entity_name = True
     _attr_translation_key = DOMAIN
     _attr_should_poll = False
-    unsub: CALLBACK_TYPE | None = None
+    _midnight_unsub: CALLBACK_TYPE | None = None
+    _interval_unsub: CALLBACK_TYPE | None = None
+    _calendar_change_unsub: CALLBACK_TYPE | None = None
 
     def __init__(
         self,
@@ -35,6 +41,7 @@ class BaseWorkdayEntity(Entity):
         trigger_on_any_all_day_events: bool,
         trigger_on_event_words: list[str],
         days_offset: int,
+        refresh_interval_minutes: int,
         name: str,
         entry_id: str,
     ) -> None:
@@ -48,6 +55,7 @@ class BaseWorkdayEntity(Entity):
             word.lower() for word in trigger_on_event_words if word.strip()
         ]
         self._days_offset = days_offset
+        self._refresh_interval = timedelta(minutes=refresh_interval_minutes)
         self._calendar_excluded_dates: set[date] = set()
         self._attr_unique_id = entry_id
         self._attr_device_info = DeviceInfo(
@@ -85,8 +93,31 @@ class BaseWorkdayEntity(Entity):
         """Update state and setup listener for next interval."""
         now = dt_util.now()
         self.update_data(now)
-        self.unsub = async_track_point_in_utc_time(
+        if self._midnight_unsub is not None:
+            self._midnight_unsub()
+            self._midnight_unsub = None
+        self._midnight_unsub = async_track_point_in_utc_time(
             self.hass, self.point_in_time_listener, self.get_next_interval(now)
+        )
+
+    def _setup_interval_listener(self) -> None:
+        """Set up refresh interval listener."""
+        if self._interval_unsub is not None:
+            self._interval_unsub()
+            self._interval_unsub = None
+        self._interval_unsub = async_track_time_interval(
+            self.hass, self.interval_listener, self._refresh_interval
+        )
+
+    def _setup_calendar_change_listener(self) -> None:
+        """Set up refresh listener for exclusion calendar state changes."""
+        if self._calendar_change_unsub is not None:
+            self._calendar_change_unsub()
+            self._calendar_change_unsub = None
+        if not self._exclusion_calendars:
+            return
+        self._calendar_change_unsub = async_track_state_change_event(
+            self.hass, self._exclusion_calendars, self.calendar_change_listener
         )
 
     @callback
@@ -94,16 +125,34 @@ class BaseWorkdayEntity(Entity):
         """Get the latest data and update state."""
         self.hass.async_create_task(self._async_refresh_and_write_state())
 
+    @callback
+    def interval_listener(self, time_date: datetime) -> None:
+        """Refresh entity state on time interval."""
+        self.hass.async_create_task(self._async_refresh_and_write_state())
+
+    @callback
+    def calendar_change_listener(self, event: Any) -> None:
+        """Refresh entity state when exclusion calendars change."""
+        self.hass.async_create_task(self._async_refresh_and_write_state())
+
     async def async_added_to_hass(self) -> None:
         """Set up first update."""
         await self._async_update_exclusion_dates()
         self._update_state_and_setup_listener()
+        self._setup_interval_listener()
+        self._setup_calendar_change_listener()
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up listeners on removal."""
-        if self.unsub is not None:
-            self.unsub()
-            self.unsub = None
+        if self._midnight_unsub is not None:
+            self._midnight_unsub()
+            self._midnight_unsub = None
+        if self._interval_unsub is not None:
+            self._interval_unsub()
+            self._interval_unsub = None
+        if self._calendar_change_unsub is not None:
+            self._calendar_change_unsub()
+            self._calendar_change_unsub = None
 
     async def _async_refresh_and_write_state(self) -> None:
         """Refresh exclusion dates and update state."""

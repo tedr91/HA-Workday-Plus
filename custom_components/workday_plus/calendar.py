@@ -17,12 +17,14 @@ from .const import (
     CONF_EXCLUDES,
     CONF_EXCLUSION_CALENDARS,
     CONF_OFFSET,
+    CONF_REFRESH_INTERVAL_MINUTES,
     CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
     CONF_TRIGGER_ON_EVENT_WORDS,
     CONF_WORKDAYS,
     DEFAULT_EXCLUDES,
     DEFAULT_NAME,
     DEFAULT_OFFSET,
+    DEFAULT_REFRESH_INTERVAL_MINUTES,
     DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
     DEFAULT_TRIGGER_ON_EVENT_WORDS,
     DEFAULT_WORKDAYS,
@@ -38,6 +40,9 @@ async def async_setup_entry(
     """Set up the Holiday Calendar config entry."""
     options = entry.options
     days_offset: int = int(options.get(CONF_OFFSET, DEFAULT_OFFSET))
+    refresh_interval_minutes: int = int(
+        options.get(CONF_REFRESH_INTERVAL_MINUTES, DEFAULT_REFRESH_INTERVAL_MINUTES)
+    )
     excludes: list[str] = options.get(CONF_EXCLUDES, DEFAULT_EXCLUDES)
     exclusion_calendars: list[str] = options.get(CONF_EXCLUSION_CALENDARS, [])
     trigger_on_any_all_day_events: bool = entry.options.get(
@@ -61,6 +66,7 @@ async def async_setup_entry(
                 trigger_on_any_all_day_events,
                 trigger_on_event_words,
                 days_offset,
+                refresh_interval_minutes,
                 sensor_name,
                 entry.entry_id,
             )
@@ -80,6 +86,7 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
         trigger_on_any_all_day_events: bool,
         trigger_on_event_words: list[str],
         days_offset: int,
+        refresh_interval_minutes: int,
         name: str,
         entry_id: str,
     ) -> None:
@@ -92,11 +99,15 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
             trigger_on_any_all_day_events,
             trigger_on_event_words,
             days_offset,
+            refresh_interval_minutes,
             name,
             entry_id,
         )
         self._attr_unique_id = entry_id
         self._attr_event = None
+        self._attr_extra_state_attributes = {
+            CONF_REFRESH_INTERVAL_MINUTES: refresh_interval_minutes,
+        }
         self.event_list: list[CalendarEvent] = []
         self._name = name
 

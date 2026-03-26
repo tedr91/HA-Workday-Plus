@@ -43,6 +43,7 @@ from .const import (
     CONF_EXCLUDES,
     CONF_EXCLUSION_CALENDARS,
     CONF_OFFSET,
+    CONF_REFRESH_INTERVAL_MINUTES,
     CONF_PROVINCE,
     CONF_REMOVE_HOLIDAYS,
     CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
@@ -51,6 +52,7 @@ from .const import (
     DEFAULT_EXCLUDES,
     DEFAULT_NAME,
     DEFAULT_OFFSET,
+    DEFAULT_REFRESH_INTERVAL_MINUTES,
     DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
     DEFAULT_TRIGGER_ON_EVENT_WORDS,
     DEFAULT_WORKDAYS,
@@ -198,6 +200,12 @@ DATA_SCHEMA_OPT = vol.Schema(
         vol.Optional(CONF_OFFSET, default=DEFAULT_OFFSET): NumberSelector(
             NumberSelectorConfig(min=-10, max=10, step=1, mode=NumberSelectorMode.BOX)
         ),
+        vol.Optional(
+            CONF_REFRESH_INTERVAL_MINUTES,
+            default=DEFAULT_REFRESH_INTERVAL_MINUTES,
+        ): NumberSelector(
+            NumberSelectorConfig(min=1, max=180, step=1, mode=NumberSelectorMode.BOX)
+        ),
         vol.Optional(CONF_EXCLUSION_CALENDARS, default=[]): EntitySelector(
             EntitySelectorConfig(domain=["calendar"], multiple=True)
         ),
@@ -292,6 +300,10 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
                 DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
             )
             combined_input.setdefault(CONF_TRIGGER_ON_EVENT_WORDS, [])
+            combined_input.setdefault(
+                CONF_REFRESH_INTERVAL_MINUTES,
+                DEFAULT_REFRESH_INTERVAL_MINUTES,
+            )
 
             try:
                 await self.hass.async_add_executor_job(
@@ -310,6 +322,9 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_COUNTRY: combined_input.get(CONF_COUNTRY),
                 CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
                 CONF_OFFSET: combined_input[CONF_OFFSET],
+                CONF_REFRESH_INTERVAL_MINUTES: combined_input[
+                    CONF_REFRESH_INTERVAL_MINUTES
+                ],
                 CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
                 CONF_EXCLUSION_CALENDARS: combined_input[CONF_EXCLUSION_CALENDARS],
                 CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: combined_input[
@@ -368,6 +383,10 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
                 DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
             )
             combined_input.setdefault(CONF_TRIGGER_ON_EVENT_WORDS, [])
+            combined_input.setdefault(
+                CONF_REFRESH_INTERVAL_MINUTES,
+                DEFAULT_REFRESH_INTERVAL_MINUTES,
+            )
             if CONF_PROVINCE not in user_input:
                 # Province not present, delete old value (if present) too
                 combined_input.pop(CONF_PROVINCE, None)
@@ -390,6 +409,9 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_COUNTRY: self.config_entry.options.get(CONF_COUNTRY),
                     CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
                     CONF_OFFSET: combined_input[CONF_OFFSET],
+                    CONF_REFRESH_INTERVAL_MINUTES: combined_input[
+                        CONF_REFRESH_INTERVAL_MINUTES
+                    ],
                     CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
                     CONF_EXCLUSION_CALENDARS: combined_input[
                         CONF_EXCLUSION_CALENDARS
