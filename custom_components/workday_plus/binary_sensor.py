@@ -22,6 +22,8 @@ from .const import (
     CONF_EXCLUDES,
     CONF_EXCLUSION_CALENDARS,
     CONF_OFFSET,
+    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+    CONF_TRIGGER_ON_EVENT_WORDS,
     CONF_WORKDAYS,
 )
 from .entity import BaseWorkdayEntity
@@ -39,6 +41,10 @@ async def async_setup_entry(
     days_offset: int = int(entry.options[CONF_OFFSET])
     excludes: list[str] = entry.options[CONF_EXCLUDES]
     exclusion_calendars: list[str] = entry.options.get(CONF_EXCLUSION_CALENDARS, [])
+    trigger_on_any_all_day_events: bool = entry.options.get(
+        CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS, True
+    )
+    trigger_on_event_words: list[str] = entry.options.get(CONF_TRIGGER_ON_EVENT_WORDS, [])
     sensor_name: str = entry.options[CONF_NAME]
     workdays: list[str] = entry.options[CONF_WORKDAYS]
     obj_holidays = entry.runtime_data
@@ -59,6 +65,8 @@ async def async_setup_entry(
                 workdays,
                 excludes,
                 exclusion_calendars,
+                trigger_on_any_all_day_events,
+                trigger_on_event_words,
                 days_offset,
                 sensor_name,
                 entry.entry_id,
@@ -78,6 +86,8 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
         workdays: list[str],
         excludes: list[str],
         exclusion_calendars: list[str],
+        trigger_on_any_all_day_events: bool,
+        trigger_on_event_words: list[str],
         days_offset: int,
         name: str,
         entry_id: str,
@@ -88,6 +98,8 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
             workdays,
             excludes,
             exclusion_calendars,
+            trigger_on_any_all_day_events,
+            trigger_on_event_words,
             days_offset,
             name,
             entry_id,
@@ -96,6 +108,8 @@ class IsWorkdaySensor(BaseWorkdayEntity, BinarySensorEntity):
             CONF_WORKDAYS: workdays,
             CONF_EXCLUDES: excludes,
             CONF_EXCLUSION_CALENDARS: exclusion_calendars,
+            CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: trigger_on_any_all_day_events,
+            CONF_TRIGGER_ON_EVENT_WORDS: trigger_on_event_words,
             CONF_OFFSET: days_offset,
         }
 

@@ -31,6 +31,8 @@ class BaseWorkdayEntity(Entity):
         workdays: list[str],
         excludes: list[str],
         exclusion_calendars: list[str],
+        trigger_on_any_all_day_events: bool,
+        trigger_on_event_words: list[str],
         days_offset: int,
         name: str,
         entry_id: str,
@@ -40,6 +42,10 @@ class BaseWorkdayEntity(Entity):
         self._workdays = workdays
         self._excludes = excludes
         self._exclusion_calendars = exclusion_calendars
+        self._trigger_on_any_all_day_events = trigger_on_any_all_day_events
+        self._trigger_on_event_words = [
+            word.lower() for word in trigger_on_event_words if word.strip()
+        ]
         self._days_offset = days_offset
         self._calendar_excluded_dates: set[date] = set()
         self._attr_unique_id = entry_id
@@ -137,15 +143,31 @@ class BaseWorkdayEntity(Entity):
                 if not isinstance(events, list):
                     continue
                 for event in events:
-                    excluded_dates.update(self._extract_all_day_event_dates(event))
+                    excluded_dates.update(self._extract_excluded_dates(event))
 
         self._calendar_excluded_dates = excluded_dates
 
-    def _extract_all_day_event_dates(self, event: Any) -> set[date]:
-        """Return all covered dates for all-day events."""
+    def _extract_excluded_dates(self, event: Any) -> set[date]:
+        """Return excluded dates for an event using configured trigger rules."""
         if not isinstance(event, dict):
             return set()
 
+        event_title = str(event.get("summary") or event.get("title") or "").lower()
+        matches_word_trigger = bool(self._trigger_on_event_words) and any(
+            word in event_title for word in self._trigger_on_event_words
+        )
+        matches_all_day_trigger = (
+            self._trigger_on_any_all_day_events and self._is_all_day_event(event)
+        )
+
+        if not matches_all_day_trigger and not matches_word_trigger:
+            return set()
+
+        include_partial_end_day = not self._is_all_day_event(event)
+        return self._extract_event_dates(event, include_partial_end_day)
+
+    def _extract_event_dates(self, event: dict[str, Any], include_partial_end_day: bool) -> set[date]:
+        """Return all covered dates for an event."""
         is_all_day = event.get("all_day")
         start_date = self._coerce_date(event.get("start"))
         end_date = self._coerce_date(event.get("end"))
@@ -153,16 +175,17 @@ class BaseWorkdayEntity(Entity):
         if start_date is None:
             return set()
 
-        if is_all_day is False:
-            return set()
-
-        if isinstance(event.get("start"), str) and "T" in event["start"] and not is_all_day:
-            return set()
-
         if end_date is None:
             return {start_date}
 
-        last_date = end_date - timedelta(days=1)
+        if include_partial_end_day:
+            last_date = end_date
+        else:
+            last_date = end_date - timedelta(days=1)
+
+        if is_all_day is False and include_partial_end_day and last_date < start_date:
+            last_date = start_date
+
         if last_date < start_date:
             return {start_date}
 
@@ -170,6 +193,17 @@ class BaseWorkdayEntity(Entity):
             start_date + timedelta(days=offset)
             for offset in range((last_date - start_date).days + 1)
         }
+
+    def _is_all_day_event(self, event: dict[str, Any]) -> bool:
+        """Detect whether an event is all-day."""
+        if event.get("all_day") is True:
+            return True
+
+        start_value = event.get("start")
+        end_value = event.get("end")
+        return isinstance(start_value, str) and "T" not in start_value and isinstance(
+            end_value, str
+        ) and "T" not in end_value
 
     def _coerce_date(self, value: Any) -> date | None:
         """Convert date-like values into date objects."""

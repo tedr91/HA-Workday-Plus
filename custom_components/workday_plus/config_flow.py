@@ -45,10 +45,14 @@ from .const import (
     CONF_OFFSET,
     CONF_PROVINCE,
     CONF_REMOVE_HOLIDAYS,
+    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+    CONF_TRIGGER_ON_EVENT_WORDS,
     CONF_WORKDAYS,
     DEFAULT_EXCLUDES,
     DEFAULT_NAME,
     DEFAULT_OFFSET,
+    DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+    DEFAULT_TRIGGER_ON_EVENT_WORDS,
     DEFAULT_WORKDAYS,
     DOMAIN,
     LOGGER,
@@ -197,6 +201,21 @@ DATA_SCHEMA_OPT = vol.Schema(
         vol.Optional(CONF_EXCLUSION_CALENDARS, default=[]): EntitySelector(
             EntitySelectorConfig(domain=["calendar"], multiple=True)
         ),
+        vol.Optional(
+            CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            default=DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+        ): bool,
+        vol.Optional(
+            CONF_TRIGGER_ON_EVENT_WORDS,
+            default=DEFAULT_TRIGGER_ON_EVENT_WORDS,
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=[],
+                multiple=True,
+                custom_value=True,
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        ),
         vol.Optional(CONF_ADD_HOLIDAYS, default=[]): SelectSelector(
             SelectSelectorConfig(
                 options=[],
@@ -268,6 +287,11 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             combined_input: dict[str, Any] = {**self.data, **user_input}
             combined_input.setdefault(CONF_EXCLUSION_CALENDARS, [])
+            combined_input.setdefault(
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            )
+            combined_input.setdefault(CONF_TRIGGER_ON_EVENT_WORDS, [])
 
             try:
                 await self.hass.async_add_executor_job(
@@ -288,6 +312,10 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_OFFSET: combined_input[CONF_OFFSET],
                 CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
                 CONF_EXCLUSION_CALENDARS: combined_input[CONF_EXCLUSION_CALENDARS],
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: combined_input[
+                    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS
+                ],
+                CONF_TRIGGER_ON_EVENT_WORDS: combined_input[CONF_TRIGGER_ON_EVENT_WORDS],
                 CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
                 CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
                 CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
@@ -335,6 +363,11 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
         if user_input is not None:
             combined_input: dict[str, Any] = {**self.config_entry.options, **user_input}
             combined_input.setdefault(CONF_EXCLUSION_CALENDARS, [])
+            combined_input.setdefault(
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            )
+            combined_input.setdefault(CONF_TRIGGER_ON_EVENT_WORDS, [])
             if CONF_PROVINCE not in user_input:
                 # Province not present, delete old value (if present) too
                 combined_input.pop(CONF_PROVINCE, None)
@@ -360,6 +393,12 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
                     CONF_EXCLUSION_CALENDARS: combined_input[
                         CONF_EXCLUSION_CALENDARS
+                    ],
+                    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: combined_input[
+                        CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS
+                    ],
+                    CONF_TRIGGER_ON_EVENT_WORDS: combined_input[
+                        CONF_TRIGGER_ON_EVENT_WORDS
                     ],
                     CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
                     CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],

@@ -13,7 +13,14 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import WorkdayConfigEntry
-from .const import CONF_EXCLUDES, CONF_EXCLUSION_CALENDARS, CONF_OFFSET, CONF_WORKDAYS
+from .const import (
+    CONF_EXCLUDES,
+    CONF_EXCLUSION_CALENDARS,
+    CONF_OFFSET,
+    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+    CONF_TRIGGER_ON_EVENT_WORDS,
+    CONF_WORKDAYS,
+)
 from .entity import BaseWorkdayEntity
 
 
@@ -26,6 +33,10 @@ async def async_setup_entry(
     days_offset: int = int(entry.options[CONF_OFFSET])
     excludes: list[str] = entry.options[CONF_EXCLUDES]
     exclusion_calendars: list[str] = entry.options.get(CONF_EXCLUSION_CALENDARS, [])
+    trigger_on_any_all_day_events: bool = entry.options.get(
+        CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS, True
+    )
+    trigger_on_event_words: list[str] = entry.options.get(CONF_TRIGGER_ON_EVENT_WORDS, [])
     sensor_name: str = entry.options[CONF_NAME]
     workdays: list[str] = entry.options[CONF_WORKDAYS]
     obj_holidays = entry.runtime_data
@@ -37,6 +48,8 @@ async def async_setup_entry(
                 workdays,
                 excludes,
                 exclusion_calendars,
+                trigger_on_any_all_day_events,
+                trigger_on_event_words,
                 days_offset,
                 sensor_name,
                 entry.entry_id,
@@ -54,6 +67,8 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
         workdays: list[str],
         excludes: list[str],
         exclusion_calendars: list[str],
+        trigger_on_any_all_day_events: bool,
+        trigger_on_event_words: list[str],
         days_offset: int,
         name: str,
         entry_id: str,
@@ -64,6 +79,8 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
             workdays,
             excludes,
             exclusion_calendars,
+            trigger_on_any_all_day_events,
+            trigger_on_event_words,
             days_offset,
             name,
             entry_id,

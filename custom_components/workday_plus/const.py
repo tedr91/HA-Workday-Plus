@@ -21,6 +21,8 @@ CONF_ADD_HOLIDAYS = "add_holidays"
 CONF_REMOVE_HOLIDAYS = "remove_holidays"
 CONF_CATEGORY = "category"
 CONF_EXCLUSION_CALENDARS = "exclusion_calendars"
+CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS = "trigger_on_any_all_day_events"
+CONF_TRIGGER_ON_EVENT_WORDS = "trigger_on_event_words"
 
 # By default, Monday - Friday are workdays
 DEFAULT_WORKDAYS = ["mon", "tue", "wed", "thu", "fri"]
@@ -28,3 +30,5 @@ DEFAULT_WORKDAYS = ["mon", "tue", "wed", "thu", "fri"]
 DEFAULT_EXCLUDES = ["sat", "sun", "holiday"]
 DEFAULT_NAME = "Workday Plus Sensor"
 DEFAULT_OFFSET = 0
+DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS = True
+DEFAULT_TRIGGER_ON_EVENT_WORDS: list[str] = []
