@@ -19,9 +19,18 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import ALLOWED_DAYS, DOMAIN, LOGGER
+from .const import (
+    ALLOWED_DAYS,
+    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+    CONF_TRIGGER_ON_EVENT_WORDS,
+    DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+    DEFAULT_TRIGGER_ON_EVENT_WORDS,
+    DOMAIN,
+    LOGGER,
+)
 
 EventWordRule = tuple[str, time, time]
+CalendarRule = tuple[bool, list[EventWordRule]]
 
 
 class BaseWorkdayEntity(Entity):
@@ -40,8 +49,7 @@ class BaseWorkdayEntity(Entity):
         workdays: list[str],
         excludes: list[str],
         exclusion_calendars: list[str],
-        trigger_on_any_all_day_events: bool,
-        trigger_on_event_words: list[str],
+        exclusion_calendar_rules: dict[str, dict[str, bool | list[str]]],
         days_offset: int,
         refresh_interval_minutes: int,
         name: str,
@@ -52,13 +60,11 @@ class BaseWorkdayEntity(Entity):
         self._workdays = workdays
         self._excludes = excludes
         self._exclusion_calendars = exclusion_calendars
-        self._trigger_on_any_all_day_events = trigger_on_any_all_day_events
-        self._trigger_on_event_words = self._parse_event_word_rules(
-            trigger_on_event_words
-        )
+        self._calendar_rules = self._parse_calendar_rules(exclusion_calendar_rules)
         self._days_offset = days_offset
         self._refresh_interval = timedelta(minutes=refresh_interval_minutes)
         self._calendar_excluded_dates: set[date] = set()
+        self._last_calendar_refresh_error: str | None = None
         self._attr_unique_id = entry_id
         self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
@@ -185,17 +191,13 @@ class BaseWorkdayEntity(Entity):
                 return_response=True,
             )
         except (HomeAssistantError, ServiceNotFound) as err:
-            LOGGER.warning(
-                "Unable to refresh exclusion calendar events for %s: %s",
-                self.entity_id,
-                err,
-            )
+            self._log_calendar_refresh_error(err)
             self._calendar_excluded_dates = set()
             return
 
         excluded_dates: set[date] = set()
         if isinstance(response, dict):
-            for value in response.values():
+            for calendar_entity_id, value in response.items():
                 events: Any = None
                 if isinstance(value, dict):
                     events = value.get("events")
@@ -204,18 +206,66 @@ class BaseWorkdayEntity(Entity):
                 if not isinstance(events, list):
                     continue
                 for event in events:
-                    excluded_dates.update(self._extract_excluded_dates(event))
+                    excluded_dates.update(
+                        self._extract_excluded_dates(event, str(calendar_entity_id))
+                    )
 
         self._calendar_excluded_dates = excluded_dates
+        self._last_calendar_refresh_error = None
 
-    def _extract_excluded_dates(self, event: Any) -> set[date]:
+    def _log_calendar_refresh_error(self, err: Exception) -> None:
+        """Log calendar refresh errors with reduced noise for transient failures."""
+        error_text = str(err)
+        is_duplicate = error_text == self._last_calendar_refresh_error
+        is_transient = self._is_transient_calendar_error(error_text)
+
+        if is_duplicate:
+            LOGGER.debug(
+                "Exclusion calendar refresh still failing for %s: %s",
+                self.entity_id,
+                error_text,
+            )
+        elif is_transient:
+            LOGGER.debug(
+                "Transient exclusion calendar refresh issue for %s: %s",
+                self.entity_id,
+                error_text,
+            )
+        else:
+            LOGGER.warning(
+                "Unable to refresh exclusion calendar events for %s: %s",
+                self.entity_id,
+                error_text,
+            )
+
+        self._last_calendar_refresh_error = error_text
+
+    def _is_transient_calendar_error(self, error_text: str) -> bool:
+        """Return whether a calendar refresh error is likely transient."""
+        normalized_error = error_text.lower()
+        transient_markers = (
+            "sync from server has not completed",
+            "did not match any entities",
+            "entity not found",
+            "entity is unavailable",
+            "temporarily unavailable",
+            "timeout",
+        )
+        return any(marker in normalized_error for marker in transient_markers)
+
+    def _extract_excluded_dates(self, event: Any, calendar_entity_id: str) -> set[date]:
         """Return excluded dates for an event using configured trigger rules."""
         if not isinstance(event, dict):
             return set()
 
+        trigger_on_any_all_day_events, trigger_on_event_words = self._calendar_rules.get(
+            calendar_entity_id,
+            (DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS, []),
+        )
+
         event_title = str(event.get("summary") or event.get("title") or "").lower()
         matches_all_day_trigger = (
-            self._trigger_on_any_all_day_events and self._is_all_day_event(event)
+            trigger_on_any_all_day_events and self._is_all_day_event(event)
         )
 
         excluded_dates: set[date] = set()
@@ -224,14 +274,19 @@ class BaseWorkdayEntity(Entity):
                 self._extract_event_dates(event, include_partial_end_day=False)
             )
 
-        excluded_dates.update(self._extract_word_trigger_dates(event, event_title))
+        excluded_dates.update(
+            self._extract_word_trigger_dates(event, event_title, trigger_on_event_words)
+        )
         return excluded_dates
 
     def _extract_word_trigger_dates(
-        self, event: dict[str, Any], event_title: str
+        self,
+        event: dict[str, Any],
+        event_title: str,
+        trigger_on_event_words: list[EventWordRule],
     ) -> set[date]:
         """Return excluded dates from configured word triggers and time windows."""
-        if not self._trigger_on_event_words:
+        if not trigger_on_event_words:
             return set()
 
         is_all_day = self._is_all_day_event(event)
@@ -242,7 +297,7 @@ class BaseWorkdayEntity(Entity):
             return set()
 
         excluded_dates: set[date] = set()
-        for word, start_time, end_time in self._trigger_on_event_words:
+        for word, start_time, end_time in trigger_on_event_words:
             if word not in event_title:
                 continue
             if is_all_day:
@@ -256,6 +311,38 @@ class BaseWorkdayEntity(Entity):
                     excluded_dates.add(candidate_date)
 
         return excluded_dates
+
+    def _parse_calendar_rules(
+        self, exclusion_calendar_rules: dict[str, dict[str, bool | list[str]]]
+    ) -> dict[str, CalendarRule]:
+        """Parse configured per-calendar rules into runtime structures."""
+        parsed_rules: dict[str, CalendarRule] = {}
+        for calendar_entity_id, raw_rule in exclusion_calendar_rules.items():
+            if not isinstance(calendar_entity_id, str) or not isinstance(raw_rule, dict):
+                continue
+
+            trigger_on_all_day = raw_rule.get(
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            )
+            if not isinstance(trigger_on_all_day, bool):
+                trigger_on_all_day = DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS
+
+            raw_word_rules = raw_rule.get(
+                CONF_TRIGGER_ON_EVENT_WORDS,
+                DEFAULT_TRIGGER_ON_EVENT_WORDS,
+            )
+            if not isinstance(raw_word_rules, list):
+                raw_word_rules = DEFAULT_TRIGGER_ON_EVENT_WORDS
+
+            parsed_rules[calendar_entity_id] = (
+                trigger_on_all_day,
+                self._parse_event_word_rules(
+                    [word for word in raw_word_rules if isinstance(word, str)]
+                ),
+            )
+
+        return parsed_rules
 
     def _parse_event_word_rules(
         self, trigger_on_event_words: list[str]

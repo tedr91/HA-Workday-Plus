@@ -16,17 +16,15 @@ from . import WorkdayConfigEntry
 from .const import (
     CONF_EXCLUDES,
     CONF_EXCLUSION_CALENDARS,
+    CONF_EXCLUSION_CALENDAR_RULES,
     CONF_OFFSET,
     CONF_REFRESH_INTERVAL_MINUTES,
-    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
-    CONF_TRIGGER_ON_EVENT_WORDS,
     CONF_WORKDAYS,
     DEFAULT_EXCLUDES,
+    DEFAULT_EXCLUSION_CALENDAR_RULES,
     DEFAULT_NAME,
     DEFAULT_OFFSET,
     DEFAULT_REFRESH_INTERVAL_MINUTES,
-    DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
-    DEFAULT_TRIGGER_ON_EVENT_WORDS,
     DEFAULT_WORKDAYS,
 )
 from .entity import BaseWorkdayEntity
@@ -45,12 +43,9 @@ async def async_setup_entry(
     )
     excludes: list[str] = options.get(CONF_EXCLUDES, DEFAULT_EXCLUDES)
     exclusion_calendars: list[str] = options.get(CONF_EXCLUSION_CALENDARS, [])
-    trigger_on_any_all_day_events: bool = entry.options.get(
-        CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
-        DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
-    )
-    trigger_on_event_words: list[str] = options.get(
-        CONF_TRIGGER_ON_EVENT_WORDS, DEFAULT_TRIGGER_ON_EVENT_WORDS
+    exclusion_calendar_rules: dict[str, dict[str, bool | list[str]]] = options.get(
+        CONF_EXCLUSION_CALENDAR_RULES,
+        DEFAULT_EXCLUSION_CALENDAR_RULES,
     )
     sensor_name: str = options.get(CONF_NAME, DEFAULT_NAME)
     workdays: list[str] = options.get(CONF_WORKDAYS, DEFAULT_WORKDAYS)
@@ -63,8 +58,7 @@ async def async_setup_entry(
                 workdays,
                 excludes,
                 exclusion_calendars,
-                trigger_on_any_all_day_events,
-                trigger_on_event_words,
+                exclusion_calendar_rules,
                 days_offset,
                 refresh_interval_minutes,
                 sensor_name,
@@ -83,8 +77,7 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
         workdays: list[str],
         excludes: list[str],
         exclusion_calendars: list[str],
-        trigger_on_any_all_day_events: bool,
-        trigger_on_event_words: list[str],
+        exclusion_calendar_rules: dict[str, dict[str, bool | list[str]]],
         days_offset: int,
         refresh_interval_minutes: int,
         name: str,
@@ -96,8 +89,7 @@ class WorkdayCalendarEntity(BaseWorkdayEntity, CalendarEntity):
             workdays,
             excludes,
             exclusion_calendars,
-            trigger_on_any_all_day_events,
-            trigger_on_event_words,
+            exclusion_calendar_rules,
             days_offset,
             refresh_interval_minutes,
             name,
