@@ -61,6 +61,9 @@ from .const import (
     LOGGER,
 )
 
+RULE_FIELD_ALL_DAY = "rule_all_day_events"
+RULE_FIELD_WORDS = "rule_event_words"
+
 
 def add_province_and_language_to_schema(
     schema: vol.Schema,
@@ -187,16 +190,54 @@ def normalize_trigger_words(raw_words: Any) -> list[str]:
     return [word.strip() for word in raw_words if isinstance(word, str) and word.strip()]
 
 
+def get_calendar_display_name(config_flow: ConfigFlow, entity_id: str) -> str:
+    """Return friendly name for a calendar entity id."""
+    state = config_flow.hass.states.get(entity_id)
+    if state is not None and state.name:
+        return state.name
+    return entity_id
+
+
+def format_rules_summary(
+    config_flow: ConfigFlow,
+    exclusion_calendars: list[str],
+    rules: dict[str, dict[str, Any]] | None,
+) -> str:
+    """Build a compact summary of current per-calendar rules."""
+    if not exclusion_calendars:
+        return "No exclusion calendars configured."
+
+    rule_map = rules if isinstance(rules, dict) else {}
+    summary_lines: list[str] = []
+    for calendar_id in exclusion_calendars:
+        display_name = get_calendar_display_name(config_flow, calendar_id)
+        calendar_rule = rule_map.get(calendar_id, {})
+        all_day = calendar_rule.get(
+            CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+        )
+        if not isinstance(all_day, bool):
+            all_day = DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS
+
+        words = normalize_trigger_words(calendar_rule.get(CONF_TRIGGER_ON_EVENT_WORDS, []))
+        words_text = ", ".join(words) if words else "none"
+        summary_lines.append(
+            f"- {display_name}: all-day={'on' if all_day else 'off'}, words={words_text}"
+        )
+
+    return "\n".join(summary_lines)
+
+
 def build_calendar_rule_schema(default_all_day: bool, default_words: list[str]) -> vol.Schema:
     """Build schema for a single calendar rule step."""
     return vol.Schema(
         {
             vol.Optional(
-                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                RULE_FIELD_ALL_DAY,
                 default=default_all_day,
             ): bool,
             vol.Optional(
-                CONF_TRIGGER_ON_EVENT_WORDS,
+                RULE_FIELD_WORDS,
                 default=default_words,
             ): SelectSelector(
                 SelectSelectorConfig(
@@ -358,6 +399,7 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "name": self.data[CONF_NAME],
                 "country": self.data.get(CONF_COUNTRY, "-"),
+                "exclusion_calendar_rules_hint": "Per-calendar rules are configured on the next screens.",
             },
         )
 
@@ -372,15 +414,16 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         calendar_entity_id = self._rule_calendar_ids[self._rule_index]
+        calendar_name = get_calendar_display_name(self, calendar_entity_id)
 
         if user_input is not None:
             self._pending_rules[calendar_entity_id] = {
                 CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: user_input.get(
-                    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                    RULE_FIELD_ALL_DAY,
                     DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
                 ),
                 CONF_TRIGGER_ON_EVENT_WORDS: normalize_trigger_words(
-                    user_input.get(CONF_TRIGGER_ON_EVENT_WORDS, [])
+                    user_input.get(RULE_FIELD_WORDS, [])
                 ),
             }
             self._rule_index += 1
@@ -399,6 +442,7 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="calendar_rule",
             data_schema=schema,
             description_placeholders={
+                "calendar_name": calendar_name,
                 "calendar_entity_id": calendar_entity_id,
                 "calendar_index": str(self._rule_index + 1),
                 "calendar_total": str(len(self._rule_calendar_ids)),
@@ -509,6 +553,11 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
 
         new_schema = self.add_suggested_values_to_schema(schema, user_input or options)
         LOGGER.debug("Errors have occurred in options %s", errors)
+        rules_hint = format_rules_summary(
+            self,
+            list(options.get(CONF_EXCLUSION_CALENDARS, [])),
+            options.get(CONF_EXCLUSION_CALENDAR_RULES, {}),
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=new_schema,
@@ -516,6 +565,7 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
             description_placeholders={
                 "name": options[CONF_NAME],
                 "country": options.get(CONF_COUNTRY, "-"),
+                "exclusion_calendar_rules_hint": rules_hint,
             },
         )
 
@@ -530,16 +580,17 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
             )
 
         calendar_entity_id = self._rule_calendar_ids[self._rule_index]
+        calendar_name = get_calendar_display_name(self, calendar_entity_id)
         existing_rule = self._pending_rules.get(calendar_entity_id, {})
 
         if user_input is not None:
             self._pending_rules[calendar_entity_id] = {
                 CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: user_input.get(
-                    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                    RULE_FIELD_ALL_DAY,
                     DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
                 ),
                 CONF_TRIGGER_ON_EVENT_WORDS: normalize_trigger_words(
-                    user_input.get(CONF_TRIGGER_ON_EVENT_WORDS, [])
+                    user_input.get(RULE_FIELD_WORDS, [])
                 ),
             }
             self._rule_index += 1
@@ -569,6 +620,7 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
             step_id="calendar_rule",
             data_schema=schema,
             description_placeholders={
+                "calendar_name": calendar_name,
                 "calendar_entity_id": calendar_entity_id,
                 "calendar_index": str(self._rule_index + 1),
                 "calendar_total": str(len(self._rule_calendar_ids)),
@@ -612,6 +664,11 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
         try:
             self._async_abort_entries_match(abort_match)
         except AbortFlow as err:
+            rules_hint = format_rules_summary(
+                self,
+                list(options.get(CONF_EXCLUSION_CALENDARS, [])),
+                options.get(CONF_EXCLUSION_CALENDAR_RULES, {}),
+            )
             return self.async_show_form(
                 step_id="init",
                 data_schema=self.add_suggested_values_to_schema(
@@ -622,6 +679,7 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
                 description_placeholders={
                     "name": options[CONF_NAME],
                     "country": options.get(CONF_COUNTRY, "-"),
+                    "exclusion_calendar_rules_hint": rules_hint,
                 },
             )
 

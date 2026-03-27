@@ -12,14 +12,14 @@
     "step": {
       "calendar_rule": {
         "data": {
-          "trigger_on_any_all_day_events": "Trigger on any all-day events",
-          "trigger_on_event_words": "Trigger words/time ranges"
+          "rule_all_day_events": "Trigger on any all-day events",
+          "rule_event_words": "Trigger words/time ranges"
         },
         "data_description": {
-          "trigger_on_any_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
-          "trigger_on_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
+          "rule_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
+          "rule_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
         },
-        "description": "Set exclusion rules for {calendar_entity_id} ({calendar_index}/{calendar_total})."
+        "description": "Set exclusion rules for {calendar_name} ({calendar_entity_id}) ({calendar_index}/{calendar_total})."
       },
       "options": {
         "data": {
@@ -46,7 +46,7 @@
           "remove_holidays": "Remove holidays as YYYY-MM-DD, as range using `,` as separator or by using partial of name",
           "workdays": "Select which weekdays to include as possible workdays."
         },
-        "description": "Set additional options for {name} configured for country {country}"
+        "description": "Set additional options for {name} configured for country {country}.\n\nCurrent calendar rule summary:\n{exclusion_calendar_rules_hint}"
       },
       "user": {
         "data": {
@@ -172,14 +172,14 @@
     "step": {
       "calendar_rule": {
         "data": {
-          "trigger_on_any_all_day_events": "Trigger on any all-day events",
-          "trigger_on_event_words": "Trigger words/time ranges"
+          "rule_all_day_events": "Trigger on any all-day events",
+          "rule_event_words": "Trigger words/time ranges"
         },
         "data_description": {
-          "trigger_on_any_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
-          "trigger_on_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
+          "rule_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
+          "rule_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
         },
-        "description": "Set exclusion rules for {calendar_entity_id} ({calendar_index}/{calendar_total})."
+        "description": "Set exclusion rules for {calendar_name} ({calendar_entity_id}) ({calendar_index}/{calendar_total})."
       },
       "init": {
         "data": {
@@ -206,7 +206,7 @@
           "remove_holidays": "Remove holidays as YYYY-MM-DD, as range using `,` as separator or by using partial of name",
           "workdays": "Select which weekdays to include as possible workdays."
         },
-        "description": "Change additional options for {name} configured for country {country}"
+        "description": "Change additional options for {name} configured for country {country}.\n\nCurrent calendar rule summary:\n{exclusion_calendar_rules_hint}"
       }
     }
   },
