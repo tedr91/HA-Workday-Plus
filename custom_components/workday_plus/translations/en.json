@@ -6,11 +6,21 @@
     "error": {
       "add_holiday_error": "Incorrect format on date (YYYY-MM-DD)",
       "add_holiday_range_error": "Incorrect format on date range (YYYY-MM-DD,YYYY-MM-DD)",
-      "invalid_calendar_rules": "Invalid exclusion calendar rules JSON",
       "remove_holiday_error": "Incorrect format on date (YYYY-MM-DD) or holiday name not found",
       "remove_holiday_range_error": "Incorrect format on date range (YYYY-MM-DD,YYYY-MM-DD)"
     },
     "step": {
+      "calendar_rule": {
+        "data": {
+          "trigger_on_any_all_day_events": "Trigger on any all-day events",
+          "trigger_on_event_words": "Trigger words/time ranges"
+        },
+        "data_description": {
+          "trigger_on_any_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
+          "trigger_on_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
+        },
+        "description": "Set exclusion rules for {calendar_entity_id} ({calendar_index}/{calendar_total})."
+      },
       "options": {
         "data": {
           "add_holidays": "Add holidays",
@@ -18,7 +28,6 @@
           "days_offset": "Offset",
           "refresh_interval_minutes": "Refresh interval (minutes)",
           "exclusion_calendars": "Add exclusion calendar(s)",
-          "exclusion_calendar_rules": "Per-calendar exclusion rules (JSON)",
           "excludes": "Days to exclude",
           "language": "Language for named holidays",
           "province": "Subdivision of country",
@@ -31,7 +40,6 @@
           "days_offset": "Days offset from current day",
           "refresh_interval_minutes": "How often to refresh workday status, in minutes.",
           "exclusion_calendars": "Select calendars whose events can signify a non-workday.",
-          "exclusion_calendar_rules": "JSON object keyed by calendar entity id. For each calendar set `trigger_on_any_all_day_events` (bool) and `trigger_on_event_words` (list). Word entries support `word` or `word|HH:MM-HH:MM`. Example: {\n  \"calendar.school\": {\n    \"trigger_on_any_all_day_events\": true,\n    \"trigger_on_event_words\": [\"half day|12:00-23:59\", \"teacher\"]\n  }\n}",
           "excludes": "Select which weekdays to exclude as workdays.\nThe key `holidays` adds those for the configured country, customizable by all the settings below. Read the documentation on how to use them correctly.",
           "language": "Language to use when configuring named holiday exclusions",
           "province": "State, territory, province or region of country",
@@ -158,11 +166,21 @@
       "add_holiday_error": "Incorrect format on date (YYYY-MM-DD)",
       "add_holiday_range_error": "Incorrect format on date range (YYYY-MM-DD,YYYY-MM-DD)",
       "already_configured": "Service with this configuration already exist",
-      "invalid_calendar_rules": "Invalid exclusion calendar rules JSON",
       "remove_holiday_error": "Incorrect format on date (YYYY-MM-DD) or holiday name not found",
       "remove_holiday_range_error": "Incorrect format on date range (YYYY-MM-DD,YYYY-MM-DD)"
     },
     "step": {
+      "calendar_rule": {
+        "data": {
+          "trigger_on_any_all_day_events": "Trigger on any all-day events",
+          "trigger_on_event_words": "Trigger words/time ranges"
+        },
+        "data_description": {
+          "trigger_on_any_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
+          "trigger_on_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
+        },
+        "description": "Set exclusion rules for {calendar_entity_id} ({calendar_index}/{calendar_total})."
+      },
       "init": {
         "data": {
           "add_holidays": "Add holidays",
@@ -170,7 +188,6 @@
           "days_offset": "Offset",
           "refresh_interval_minutes": "Refresh interval (minutes)",
           "exclusion_calendars": "Add exclusion calendar(s)",
-          "exclusion_calendar_rules": "Per-calendar exclusion rules (JSON)",
           "excludes": "Days to exclude",
           "language": "Language for named holidays",
           "province": "Subdivision of country",
@@ -183,7 +200,6 @@
           "days_offset": "Days offset from current day",
           "refresh_interval_minutes": "How often to refresh workday status, in minutes.",
           "exclusion_calendars": "Select calendars whose events can signify a non-workday.",
-          "exclusion_calendar_rules": "JSON object keyed by calendar entity id. For each calendar set `trigger_on_any_all_day_events` (bool) and `trigger_on_event_words` (list). Word entries support `word` or `word|HH:MM-HH:MM`. Example: {\n  \"calendar.school\": {\n    \"trigger_on_any_all_day_events\": true,\n    \"trigger_on_event_words\": [\"half day|12:00-23:59\", \"teacher\"]\n  }\n}",
           "excludes": "Select which weekdays to exclude as workdays.\nThe key `holidays` adds those for the configured country, customizable by all the settings below. Read the documentation on how to use them correctly.",
           "language": "Language to use when configuring named holiday exclusions",
           "province": "State, territory, province or region of country",

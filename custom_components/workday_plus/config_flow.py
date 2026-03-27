@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import partial
-import json
 from typing import Any
 
 from holidays import PUBLIC, HolidayBase, country_holidays, list_supported_countries
@@ -52,7 +51,6 @@ from .const import (
     CONF_TRIGGER_ON_EVENT_WORDS,
     CONF_WORKDAYS,
     DEFAULT_EXCLUDES,
-    DEFAULT_EXCLUSION_CALENDAR_RULES,
     DEFAULT_NAME,
     DEFAULT_OFFSET,
     DEFAULT_REFRESH_INTERVAL_MINUTES,
@@ -182,81 +180,34 @@ def validate_custom_dates(user_input: dict[str, Any]) -> None:
             raise RemoveDatesError("Incorrect date or name")
 
 
-def normalize_exclusion_calendar_rules(
-    raw_rules: Any,
-    exclusion_calendars: list[str],
-) -> dict[str, dict[str, Any]]:
-    """Validate and normalize per-calendar exclusion rules."""
-    if raw_rules in (None, "", {}):
-        parsed_rules: Any = {}
-    elif isinstance(raw_rules, str):
-        try:
-            parsed_rules = json.loads(raw_rules)
-        except json.JSONDecodeError as err:
-            raise CalendarRulesError("Invalid JSON") from err
-    elif isinstance(raw_rules, dict):
-        parsed_rules = raw_rules
-    else:
-        raise CalendarRulesError("Rules must be JSON object")
+def normalize_trigger_words(raw_words: Any) -> list[str]:
+    """Normalize trigger words list from selector input."""
+    if not isinstance(raw_words, list):
+        return []
+    return [word.strip() for word in raw_words if isinstance(word, str) and word.strip()]
 
-    if not isinstance(parsed_rules, dict):
-        raise CalendarRulesError("Rules must be JSON object")
 
-    normalized_rules: dict[str, dict[str, Any]] = {}
-    selected_calendar_ids = set(exclusion_calendars)
-    for calendar_entity_id, calendar_rule in parsed_rules.items():
-        if not isinstance(calendar_entity_id, str) or not calendar_entity_id:
-            raise CalendarRulesError("Calendar key must be non-empty string")
-        if selected_calendar_ids and calendar_entity_id not in selected_calendar_ids:
-            raise CalendarRulesError("Calendar key must exist in exclusion calendars")
-        if not isinstance(calendar_rule, dict):
-            raise CalendarRulesError("Calendar rule must be object")
-
-        trigger_on_all_day = calendar_rule.get(
-            CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
-            DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
-        )
-        if not isinstance(trigger_on_all_day, bool):
-            raise CalendarRulesError(
-                f"{CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS} must be true/false"
-            )
-
-        trigger_words = calendar_rule.get(
-            CONF_TRIGGER_ON_EVENT_WORDS,
-            DEFAULT_TRIGGER_ON_EVENT_WORDS,
-        )
-        if not isinstance(trigger_words, list) or any(
-            not isinstance(word, str) for word in trigger_words
-        ):
-            raise CalendarRulesError(f"{CONF_TRIGGER_ON_EVENT_WORDS} must be string list")
-
-        normalized_rules[calendar_entity_id] = {
-            CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: trigger_on_all_day,
-            CONF_TRIGGER_ON_EVENT_WORDS: [word.strip() for word in trigger_words if word.strip()],
+def build_calendar_rule_schema(default_all_day: bool, default_words: list[str]) -> vol.Schema:
+    """Build schema for a single calendar rule step."""
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                default=default_all_day,
+            ): bool,
+            vol.Optional(
+                CONF_TRIGGER_ON_EVENT_WORDS,
+                default=default_words,
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[],
+                    multiple=True,
+                    custom_value=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
         }
-
-    return normalized_rules
-
-
-def serialize_exclusion_calendar_rules(rules: Any) -> str:
-    """Serialize per-calendar exclusion rules for form display."""
-    if isinstance(rules, str):
-        return rules
-    if isinstance(rules, dict):
-        return json.dumps(rules, indent=2)
-    return "{}"
-
-
-def form_values_with_serialized_calendar_rules(values: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Convert rules object into display string for selector forms."""
-    if values is None:
-        return None
-
-    formatted_values = dict(values)
-    formatted_values[CONF_EXCLUSION_CALENDAR_RULES] = serialize_exclusion_calendar_rules(
-        formatted_values.get(CONF_EXCLUSION_CALENDAR_RULES, DEFAULT_EXCLUSION_CALENDAR_RULES)
     )
-    return formatted_values
 
 
 DATA_SCHEMA_OPT = vol.Schema(
@@ -289,10 +240,6 @@ DATA_SCHEMA_OPT = vol.Schema(
         vol.Optional(CONF_EXCLUSION_CALENDARS, default=[]): EntitySelector(
             EntitySelectorConfig(domain=["calendar"], multiple=True)
         ),
-        vol.Optional(
-            CONF_EXCLUSION_CALENDAR_RULES,
-            default="{}",
-        ): TextSelector(),
         vol.Optional(CONF_ADD_HOLIDAYS, default=[]): SelectSelector(
             SelectSelectorConfig(
                 options=[],
@@ -319,6 +266,10 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     data: dict[str, Any] = {}
+    _pending_options: dict[str, Any]
+    _pending_rules: dict[str, dict[str, Any]]
+    _rule_calendar_ids: list[str]
+    _rule_index: int
 
     @staticmethod
     @callback
@@ -364,21 +315,10 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             combined_input: dict[str, Any] = {**self.data, **user_input}
             combined_input.setdefault(CONF_EXCLUSION_CALENDARS, [])
-            combined_input.setdefault(CONF_EXCLUSION_CALENDAR_RULES, "{}")
             combined_input.setdefault(
                 CONF_REFRESH_INTERVAL_MINUTES,
                 DEFAULT_REFRESH_INTERVAL_MINUTES,
             )
-
-            try:
-                combined_input[CONF_EXCLUSION_CALENDAR_RULES] = (
-                    normalize_exclusion_calendar_rules(
-                        combined_input.get(CONF_EXCLUSION_CALENDAR_RULES),
-                        combined_input[CONF_EXCLUSION_CALENDARS],
-                    )
-                )
-            except CalendarRulesError:
-                errors[CONF_EXCLUSION_CALENDAR_RULES] = "invalid_calendar_rules"
 
             try:
                 await self.hass.async_add_executor_job(
@@ -393,45 +333,24 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
             except RemoveDateRangeError:
                 errors["remove_holidays"] = "remove_holiday_range_error"
 
-            abort_match = {
-                CONF_COUNTRY: combined_input.get(CONF_COUNTRY),
-                CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
-                CONF_OFFSET: combined_input[CONF_OFFSET],
-                CONF_REFRESH_INTERVAL_MINUTES: combined_input[
-                    CONF_REFRESH_INTERVAL_MINUTES
-                ],
-                CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
-                CONF_EXCLUSION_CALENDARS: combined_input[CONF_EXCLUSION_CALENDARS],
-                CONF_EXCLUSION_CALENDAR_RULES: combined_input[
-                    CONF_EXCLUSION_CALENDAR_RULES
-                ],
-                CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
-                CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
-                CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
-            }
-            if CONF_CATEGORY in combined_input:
-                abort_match[CONF_CATEGORY] = combined_input[CONF_CATEGORY]
-            LOGGER.debug("abort_check in options with %s", combined_input)
-            self._async_abort_entries_match(abort_match)
-
             LOGGER.debug("Errors have occurred %s", errors)
             if not errors:
-                LOGGER.debug("No duplicate, no errors, creating entry")
-                return self.async_create_entry(
-                    title=combined_input[CONF_NAME],
-                    data={},
-                    options=combined_input,
-                )
+                self._pending_options = combined_input
+                self._pending_rules = {}
+                self._rule_calendar_ids = combined_input[CONF_EXCLUSION_CALENDARS]
+                self._rule_index = 0
+
+                if not self._rule_calendar_ids:
+                    return self._create_config_entry_with_rules(self._pending_options, {})
+
+                return await self.async_step_calendar_rule()
 
         schema = await self.hass.async_add_executor_job(
             add_province_and_language_to_schema,
             DATA_SCHEMA_OPT,
             self.data.get(CONF_COUNTRY),
         )
-        new_schema = self.add_suggested_values_to_schema(
-            schema,
-            form_values_with_serialized_calendar_rules(user_input),
-        )
+        new_schema = self.add_suggested_values_to_schema(schema, user_input)
         return self.async_show_form(
             step_id="options",
             data_schema=new_schema,
@@ -442,9 +361,97 @@ class WorkdayConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_calendar_rule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Collect per-calendar exclusion rules."""
+        if self._rule_index >= len(self._rule_calendar_ids):
+            return self._create_config_entry_with_rules(
+                self._pending_options,
+                self._pending_rules,
+            )
+
+        calendar_entity_id = self._rule_calendar_ids[self._rule_index]
+
+        if user_input is not None:
+            self._pending_rules[calendar_entity_id] = {
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: user_input.get(
+                    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                    DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                ),
+                CONF_TRIGGER_ON_EVENT_WORDS: normalize_trigger_words(
+                    user_input.get(CONF_TRIGGER_ON_EVENT_WORDS, [])
+                ),
+            }
+            self._rule_index += 1
+            if self._rule_index >= len(self._rule_calendar_ids):
+                return self._create_config_entry_with_rules(
+                    self._pending_options,
+                    self._pending_rules,
+                )
+            return await self.async_step_calendar_rule()
+
+        schema = build_calendar_rule_schema(
+            default_all_day=DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            default_words=DEFAULT_TRIGGER_ON_EVENT_WORDS,
+        )
+        return self.async_show_form(
+            step_id="calendar_rule",
+            data_schema=schema,
+            description_placeholders={
+                "calendar_entity_id": calendar_entity_id,
+                "calendar_index": str(self._rule_index + 1),
+                "calendar_total": str(len(self._rule_calendar_ids)),
+            },
+        )
+
+    def _create_config_entry_with_rules(
+        self,
+        options: dict[str, Any],
+        rules: dict[str, dict[str, Any]],
+    ) -> ConfigFlowResult:
+        """Finalize config entry creation with normalized per-calendar rules."""
+        combined_input = {
+            **options,
+            CONF_EXCLUSION_CALENDAR_RULES: rules,
+        }
+
+        abort_match = {
+            CONF_COUNTRY: combined_input.get(CONF_COUNTRY),
+            CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
+            CONF_OFFSET: combined_input[CONF_OFFSET],
+            CONF_REFRESH_INTERVAL_MINUTES: combined_input[
+                CONF_REFRESH_INTERVAL_MINUTES
+            ],
+            CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
+            CONF_EXCLUSION_CALENDARS: combined_input[CONF_EXCLUSION_CALENDARS],
+            CONF_EXCLUSION_CALENDAR_RULES: combined_input[
+                CONF_EXCLUSION_CALENDAR_RULES
+            ],
+            CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
+            CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
+            CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
+        }
+        if CONF_CATEGORY in combined_input:
+            abort_match[CONF_CATEGORY] = combined_input[CONF_CATEGORY]
+        LOGGER.debug("abort_check in options with %s", combined_input)
+        self._async_abort_entries_match(abort_match)
+
+        LOGGER.debug("No duplicate, no errors, creating entry")
+        return self.async_create_entry(
+            title=combined_input[CONF_NAME],
+            data={},
+            options=combined_input,
+        )
+
 
 class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
     """Handle Workday options."""
+
+    _pending_options: dict[str, Any]
+    _pending_rules: dict[str, dict[str, Any]]
+    _rule_calendar_ids: list[str]
+    _rule_index: int
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -455,21 +462,10 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
         if user_input is not None:
             combined_input: dict[str, Any] = {**self.config_entry.options, **user_input}
             combined_input.setdefault(CONF_EXCLUSION_CALENDARS, [])
-            combined_input.setdefault(CONF_EXCLUSION_CALENDAR_RULES, "{}")
             combined_input.setdefault(
                 CONF_REFRESH_INTERVAL_MINUTES,
                 DEFAULT_REFRESH_INTERVAL_MINUTES,
             )
-
-            try:
-                combined_input[CONF_EXCLUSION_CALENDAR_RULES] = (
-                    normalize_exclusion_calendar_rules(
-                        combined_input.get(CONF_EXCLUSION_CALENDAR_RULES),
-                        combined_input[CONF_EXCLUSION_CALENDARS],
-                    )
-                )
-            except CalendarRulesError:
-                errors[CONF_EXCLUSION_CALENDAR_RULES] = "invalid_calendar_rules"
 
             if CONF_PROVINCE not in user_input:
                 # Province not present, delete old value (if present) too
@@ -488,33 +484,21 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
             except RemoveDateRangeError:
                 errors["remove_holidays"] = "remove_holiday_range_error"
             else:
-                LOGGER.debug("abort_check in options with %s", combined_input)
-                abort_match = {
-                    CONF_COUNTRY: self.config_entry.options.get(CONF_COUNTRY),
-                    CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
-                    CONF_OFFSET: combined_input[CONF_OFFSET],
-                    CONF_REFRESH_INTERVAL_MINUTES: combined_input[
-                        CONF_REFRESH_INTERVAL_MINUTES
-                    ],
-                    CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
-                    CONF_EXCLUSION_CALENDARS: combined_input[
-                        CONF_EXCLUSION_CALENDARS
-                    ],
-                    CONF_EXCLUSION_CALENDAR_RULES: combined_input[
-                        CONF_EXCLUSION_CALENDAR_RULES
-                    ],
-                    CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
-                    CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
-                    CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
-                }
-                if CONF_CATEGORY in combined_input:
-                    abort_match[CONF_CATEGORY] = combined_input[CONF_CATEGORY]
-                try:
-                    self._async_abort_entries_match(abort_match)
-                except AbortFlow as err:
-                    errors = {"base": err.reason}
-                else:
-                    return self.async_create_entry(data=combined_input)
+                self._pending_options = combined_input
+                existing_rules = combined_input.get(CONF_EXCLUSION_CALENDAR_RULES, {})
+                self._pending_rules = (
+                    existing_rules.copy() if isinstance(existing_rules, dict) else {}
+                )
+                self._rule_calendar_ids = combined_input[CONF_EXCLUSION_CALENDARS]
+                self._rule_index = 0
+
+                if not self._rule_calendar_ids:
+                    return self._create_options_entry_with_rules(
+                        self._pending_options,
+                        {},
+                    )
+
+                return await self.async_step_calendar_rule()
 
         options = self.config_entry.options
         schema: vol.Schema = await self.hass.async_add_executor_job(
@@ -523,10 +507,7 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
             options.get(CONF_COUNTRY),
         )
 
-        new_schema = self.add_suggested_values_to_schema(
-            schema,
-            form_values_with_serialized_calendar_rules(user_input or options),
-        )
+        new_schema = self.add_suggested_values_to_schema(schema, user_input or options)
         LOGGER.debug("Errors have occurred in options %s", errors)
         return self.async_show_form(
             step_id="init",
@@ -537,6 +518,114 @@ class WorkdayOptionsFlowHandler(OptionsFlowWithReload):
                 "country": options.get(CONF_COUNTRY, "-"),
             },
         )
+
+    async def async_step_calendar_rule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Collect per-calendar exclusion rules for options."""
+        if self._rule_index >= len(self._rule_calendar_ids):
+            return self._create_options_entry_with_rules(
+                self._pending_options,
+                self._pending_rules,
+            )
+
+        calendar_entity_id = self._rule_calendar_ids[self._rule_index]
+        existing_rule = self._pending_rules.get(calendar_entity_id, {})
+
+        if user_input is not None:
+            self._pending_rules[calendar_entity_id] = {
+                CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS: user_input.get(
+                    CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                    DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+                ),
+                CONF_TRIGGER_ON_EVENT_WORDS: normalize_trigger_words(
+                    user_input.get(CONF_TRIGGER_ON_EVENT_WORDS, [])
+                ),
+            }
+            self._rule_index += 1
+            if self._rule_index >= len(self._rule_calendar_ids):
+                return self._create_options_entry_with_rules(
+                    self._pending_options,
+                    self._pending_rules,
+                )
+            return await self.async_step_calendar_rule()
+
+        default_all_day = existing_rule.get(
+            CONF_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+            DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS,
+        )
+        if not isinstance(default_all_day, bool):
+            default_all_day = DEFAULT_TRIGGER_ON_ANY_ALL_DAY_EVENTS
+
+        default_words = normalize_trigger_words(
+            existing_rule.get(CONF_TRIGGER_ON_EVENT_WORDS, DEFAULT_TRIGGER_ON_EVENT_WORDS)
+        )
+
+        schema = build_calendar_rule_schema(
+            default_all_day=default_all_day,
+            default_words=default_words,
+        )
+        return self.async_show_form(
+            step_id="calendar_rule",
+            data_schema=schema,
+            description_placeholders={
+                "calendar_entity_id": calendar_entity_id,
+                "calendar_index": str(self._rule_index + 1),
+                "calendar_total": str(len(self._rule_calendar_ids)),
+            },
+        )
+
+    def _create_options_entry_with_rules(
+        self,
+        options: dict[str, Any],
+        rules: dict[str, dict[str, Any]],
+    ) -> ConfigFlowResult:
+        """Finalize options flow with per-calendar exclusion rules."""
+        combined_input = {
+            **options,
+            CONF_EXCLUSION_CALENDAR_RULES: {
+                calendar_id: rules[calendar_id]
+                for calendar_id in options[CONF_EXCLUSION_CALENDARS]
+                if calendar_id in rules
+            },
+        }
+
+        LOGGER.debug("abort_check in options with %s", combined_input)
+        abort_match = {
+            CONF_COUNTRY: self.config_entry.options.get(CONF_COUNTRY),
+            CONF_EXCLUDES: combined_input[CONF_EXCLUDES],
+            CONF_OFFSET: combined_input[CONF_OFFSET],
+            CONF_REFRESH_INTERVAL_MINUTES: combined_input[
+                CONF_REFRESH_INTERVAL_MINUTES
+            ],
+            CONF_WORKDAYS: combined_input[CONF_WORKDAYS],
+            CONF_EXCLUSION_CALENDARS: combined_input[CONF_EXCLUSION_CALENDARS],
+            CONF_EXCLUSION_CALENDAR_RULES: combined_input[
+                CONF_EXCLUSION_CALENDAR_RULES
+            ],
+            CONF_ADD_HOLIDAYS: combined_input[CONF_ADD_HOLIDAYS],
+            CONF_REMOVE_HOLIDAYS: combined_input[CONF_REMOVE_HOLIDAYS],
+            CONF_PROVINCE: combined_input.get(CONF_PROVINCE),
+        }
+        if CONF_CATEGORY in combined_input:
+            abort_match[CONF_CATEGORY] = combined_input[CONF_CATEGORY]
+        try:
+            self._async_abort_entries_match(abort_match)
+        except AbortFlow as err:
+            return self.async_show_form(
+                step_id="init",
+                data_schema=self.add_suggested_values_to_schema(
+                    DATA_SCHEMA_OPT,
+                    options,
+                ),
+                errors={"base": err.reason},
+                description_placeholders={
+                    "name": options[CONF_NAME],
+                    "country": options.get(CONF_COUNTRY, "-"),
+                },
+            )
+
+        return self.async_create_entry(data=combined_input)
 
 
 class AddDatesError(HomeAssistantError):
@@ -553,10 +642,6 @@ class RemoveDatesError(HomeAssistantError):
 
 class RemoveDateRangeError(HomeAssistantError):
     """Exception for error removing dates."""
-
-
-class CalendarRulesError(HomeAssistantError):
-    """Exception for invalid exclusion calendar rules."""
 
 
 class CountryNotExist(HomeAssistantError):
