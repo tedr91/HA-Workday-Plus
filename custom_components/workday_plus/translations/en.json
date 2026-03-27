@@ -19,7 +19,7 @@
           "rule_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
           "rule_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
         },
-        "description": "Set exclusion rules for {calendar_name} ({calendar_entity_id}) ({calendar_index}/{calendar_total})."
+        "description": "({calendar_index} of {calendar_total}) Set exclusion rules for {calendar_name} ({calendar_entity_id})."
       },
       "options": {
         "data": {
@@ -39,14 +39,14 @@
           "category": "Select additional categories to include as holidays",
           "days_offset": "Days offset from current day",
           "refresh_interval_minutes": "How often to refresh workday status, in minutes.",
-          "exclusion_calendars": "Select calendars whose events can signify a non-workday.",
+          "exclusion_calendars": "Select calendars whose events can signify a non-workday.\n\nCurrent calendar rule summary:\n{exclusion_calendar_rules_hint}",
           "excludes": "Select which weekdays to exclude as workdays.\nThe key `holidays` adds those for the configured country, customizable by all the settings below. Read the documentation on how to use them correctly.",
           "language": "Language to use when configuring named holiday exclusions",
           "province": "State, territory, province or region of country",
           "remove_holidays": "Remove holidays as YYYY-MM-DD, as range using `,` as separator or by using partial of name",
           "workdays": "Select which weekdays to include as possible workdays."
         },
-        "description": "Set additional options for {name} configured for country {country}.\n\nCurrent calendar rule summary:\n{exclusion_calendar_rules_hint}"
+        "description": "Set additional options for {name} configured for country {country}"
       },
       "user": {
         "data": {
@@ -179,7 +179,7 @@
           "rule_all_day_events": "When enabled, any all-day event in this calendar marks that day as a non-workday.",
           "rule_event_words": "Add one or more values as `word` or `word|HH:MM-HH:MM`. Plain `word` defaults to 00:00-23:59."
         },
-        "description": "Set exclusion rules for {calendar_name} ({calendar_entity_id}) ({calendar_index}/{calendar_total})."
+        "description": "({calendar_index} of {calendar_total}) Set exclusion rules for {calendar_name} ({calendar_entity_id})."
       },
       "init": {
         "data": {
@@ -199,14 +199,14 @@
           "category": "Select additional categories to include as holidays",
           "days_offset": "Days offset from current day",
           "refresh_interval_minutes": "How often to refresh workday status, in minutes.",
-          "exclusion_calendars": "Select calendars whose events can signify a non-workday.",
+          "exclusion_calendars": "Select calendars whose events can signify a non-workday.\n\nCurrent calendar rule summary:\n{exclusion_calendar_rules_hint}",
           "excludes": "Select which weekdays to exclude as workdays.\nThe key `holidays` adds those for the configured country, customizable by all the settings below. Read the documentation on how to use them correctly.",
           "language": "Language to use when configuring named holiday exclusions",
           "province": "State, territory, province or region of country",
           "remove_holidays": "Remove holidays as YYYY-MM-DD, as range using `,` as separator or by using partial of name",
           "workdays": "Select which weekdays to include as possible workdays."
         },
-        "description": "Change additional options for {name} configured for country {country}.\n\nCurrent calendar rule summary:\n{exclusion_calendar_rules_hint}"
+        "description": "Change additional options for {name} configured for country {country}"
       }
     }
   },
