@@ -77,6 +77,11 @@
         "name": "Workday Calendar"
       }
     },
+    "sensor": {
+      "next_active_alarm": {
+        "name": "Next Active Alarm"
+      }
+    },
     "time": {
       "workday_alarm": {
         "name": "Workday Alarm"
