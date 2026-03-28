@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from typing import Any
 
 from holidays import HolidayBase
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import CONF_NAME
+from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
@@ -79,6 +82,7 @@ class NextActiveAlarmSensor(BaseWorkdayEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_has_entity_name = True
     _attr_translation_key = "next_active_alarm"
+    _alarm_entities_unsub: CALLBACK_TYPE | None = None
 
     def __init__(
         self,
@@ -115,9 +119,22 @@ class NextActiveAlarmSensor(BaseWorkdayEntity, SensorEntity):
             "offday_alarm_enabled": None,
         }
 
+    async def async_added_to_hass(self) -> None:
+        """Set up listeners when added to Home Assistant."""
+        await super().async_added_to_hass()
+        self._setup_alarm_entities_listener()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Clean up listeners when removed from Home Assistant."""
+        if self._alarm_entities_unsub is not None:
+            self._alarm_entities_unsub()
+            self._alarm_entities_unsub = None
+        await super().async_will_remove_from_hass()
+
     def update_data(self, now: datetime) -> None:
         """Update data for next active alarm."""
         self._refresh_entity_ids()
+        self._setup_alarm_entities_listener()
 
         workday_alarm_time = self._read_alarm_time(WORKDAY_ALARM_TIME_SUFFIX)
         offday_alarm_time = self._read_alarm_time(OFFDAY_ALARM_TIME_SUFFIX)
@@ -141,21 +158,42 @@ class NextActiveAlarmSensor(BaseWorkdayEntity, SensorEntity):
             "offday_alarm_enabled": offday_alarm_enabled,
         }
 
+    def _setup_alarm_entities_listener(self) -> None:
+        """Listen for state changes on associated alarm entities."""
+        entity_ids = list(self._entity_ids.values())
+        if not entity_ids:
+            return
+
+        if self._alarm_entities_unsub is not None:
+            self._alarm_entities_unsub()
+            self._alarm_entities_unsub = None
+
+        self._alarm_entities_unsub = async_track_state_change_event(
+            self.hass,
+            entity_ids,
+            self.alarm_entities_change_listener,
+        )
+
+    @callback
+    def alarm_entities_change_listener(self, event: Any) -> None:
+        """Refresh when associated alarm entities change."""
+        self.hass.async_create_task(self._async_refresh_and_write_state())
+
     def _refresh_entity_ids(self) -> None:
         """Refresh local cache of platform entity ids."""
         entity_registry = er.async_get(self.hass)
-        for entry in er.async_entries_for_config_entry(entity_registry, self._entry_id):
-            unique_id = entry.unique_id
+        for reg_entry in er.async_entries_for_config_entry(entity_registry, self._entry_id):
+            unique_id = reg_entry.unique_id
             if unique_id.endswith(WORKDAY_ALARM_TIME_SUFFIX):
-                self._entity_ids[WORKDAY_ALARM_TIME_SUFFIX] = entry.entity_id
+                self._entity_ids[WORKDAY_ALARM_TIME_SUFFIX] = reg_entry.entity_id
             elif unique_id.endswith(OFFDAY_ALARM_TIME_SUFFIX):
-                self._entity_ids[OFFDAY_ALARM_TIME_SUFFIX] = entry.entity_id
+                self._entity_ids[OFFDAY_ALARM_TIME_SUFFIX] = reg_entry.entity_id
             elif unique_id.endswith(WORKDAY_ALARM_ENABLED_SUFFIX):
-                self._entity_ids[WORKDAY_ALARM_ENABLED_SUFFIX] = entry.entity_id
+                self._entity_ids[WORKDAY_ALARM_ENABLED_SUFFIX] = reg_entry.entity_id
             elif unique_id.endswith(OFFDAY_ALARM_ENABLED_SUFFIX):
-                self._entity_ids[OFFDAY_ALARM_ENABLED_SUFFIX] = entry.entity_id
+                self._entity_ids[OFFDAY_ALARM_ENABLED_SUFFIX] = reg_entry.entity_id
 
-    def _read_alarm_time(self, suffix: str):
+    def _read_alarm_time(self, suffix: str) -> time | None:
         """Read a configured alarm time from state."""
         entity_id = self._entity_ids.get(suffix)
         if entity_id is None:
@@ -182,8 +220,8 @@ class NextActiveAlarmSensor(BaseWorkdayEntity, SensorEntity):
     def _calculate_next_alarm(
         self,
         now: datetime,
-        workday_alarm_time,
-        offday_alarm_time,
+        workday_alarm_time: time | None,
+        offday_alarm_time: time | None,
         workday_alarm_enabled: bool | None,
         offday_alarm_enabled: bool | None,
     ) -> tuple[datetime | None, str | None]:
@@ -220,6 +258,8 @@ class NextActiveAlarmSensor(BaseWorkdayEntity, SensorEntity):
 
         return (None, None)
 
-    def _build_local_datetime(self, alarm_date: date, alarm_time, now: datetime) -> datetime:
+    def _build_local_datetime(
+        self, alarm_date: date, alarm_time: time, now: datetime
+    ) -> datetime:
         """Build timezone-aware local datetime for an alarm."""
         return datetime.combine(alarm_date, alarm_time, tzinfo=now.tzinfo)

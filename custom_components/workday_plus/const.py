@@ -15,9 +15,9 @@ DOMAIN = "workday_plus"
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.CALENDAR,
-    Platform.SENSOR,
     Platform.SWITCH,
     Platform.TIME,
+    Platform.SENSOR,
 ]
 
 CONF_PROVINCE = "province"
