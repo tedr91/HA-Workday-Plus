@@ -76,6 +76,22 @@
       "workday": {
         "name": "Workday Calendar"
       }
+    },
+    "time": {
+      "workday_alarm": {
+        "name": "Workday Alarm"
+      },
+      "offday_alarm": {
+        "name": "Offday Alarm"
+      }
+    },
+    "switch": {
+      "workday_alarm_enabled": {
+        "name": "Workday Alarm Enabled"
+      },
+      "offday_alarm_enabled": {
+        "name": "Offday Alarm Enabled"
+      }
     }
   },
   "issues": {
